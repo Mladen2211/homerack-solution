@@ -19,6 +19,7 @@ export default defineNuxtConfig({
     head: {
       htmlAttrs: { lang: 'en' },
       link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+      meta: [{ name: 'google-site-verification', content: 'k7fT2u2rBwuOd7MVOoyNjt00xAamgqOLbWxQ2UBbNfE' }],
     },
   },
 
