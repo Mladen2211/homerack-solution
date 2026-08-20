@@ -1,0 +1,12 @@
+node_modules/
+.nuxt/
+.output/
+.data/
+data/
+*.db
+*.db-journal
+.env
+.env.*
+!.env.example
+.DS_Store
+npm-debug.log*

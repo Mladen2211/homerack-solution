@@ -1,0 +1,11 @@
+node_modules
+.nuxt
+.output
+.git
+.github
+data
+*.db
+*.db-journal
+.env
+.env.*
+!.env.example

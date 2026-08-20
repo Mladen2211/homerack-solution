@@ -1,0 +1,73 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #14151a;
+  --color-surface: #1b1d24;
+  --color-surface-2: #22252d;
+  --color-surface-3: #292c36;
+  --color-text: #edeef2;
+  --color-text-dim: #9ba0ac;
+  --color-text-faint: #686d7a;
+  --color-amber: #e2793a;
+  --color-amber-dim: #a85c2c;
+  --color-blue: #5b8cff;
+  --color-line: #2c303c;
+  --color-latch: #c9524a;
+
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-fade-in: fade-in 0.6s ease-out both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(22px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-body);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .reveal {
+    opacity: 0;
+  }
+  .reveal-visible {
+    animation: var(--animate-fade-up);
+  }
+}
