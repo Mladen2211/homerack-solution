@@ -51,3 +51,37 @@ export function insertSurveyResponse(input: SurveyResponseInput) {
     input.userAgent,
   )
 }
+
+export interface SurveyResponseRow {
+  id: number
+  interest: string | null
+  sizes: string[]
+  comment: string
+  createdAt: string
+}
+
+// Deliberately omits user_agent — this backs the results dashboard, which is
+// unauthenticated (unguessable-path only), so per-visitor identifying data stays
+// SSH-export-only rather than reachable through the JSON API.
+export function getSurveyResponses(): SurveyResponseRow[] {
+  const database = useDb()
+  const rows = database
+    .prepare('SELECT id, interest, sizes, comment, created_at FROM survey_responses ORDER BY id ASC')
+    .all() as { id: number; interest: string | null; sizes: string; comment: string; created_at: string }[]
+
+  return rows.map((row) => {
+    let sizes: string[] = []
+    try {
+      sizes = JSON.parse(row.sizes ?? '[]')
+    } catch {
+      sizes = []
+    }
+    return {
+      id: row.id,
+      interest: row.interest,
+      sizes,
+      comment: row.comment ?? '',
+      createdAt: row.created_at,
+    }
+  })
+}
