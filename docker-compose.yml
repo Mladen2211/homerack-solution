@@ -2,7 +2,9 @@ services:
   homerack:
     image: ghcr.io/mladen2211/homerack-solution:latest
     container_name: homerack
-    restart: unless-stopped
+    restart: always
+    ports:
+      - "3000:3000"
     environment:
       NUXT_PUBLIC_SITE_URL: https://homerack.mraguz.com
       NUXT_DATABASE_PATH: /app/data/homerack.db
@@ -12,24 +14,14 @@ services:
       NUXT_SURVEY_IP_SALT: ${NUXT_SURVEY_IP_SALT:?Set NUXT_SURVEY_IP_SALT in .env}
       NUXT_OG_IMAGE_SECRET: "${NUXT_OG_IMAGE_SECRET:?Set NUXT_OG_IMAGE_SECRET in .env (generate with npx nuxt-og-image generate-secret)}"
     volumes:
-      - homerack_data:/app/data
-    networks:
-      - proxy
+      - ./data:/app/data
     labels:
-      # Watchtower: picks up new :latest images pushed by CI. Adjust the label if
-      # your Watchtower instance uses a different scope/filter.
-      - com.centurylabs.watchtower.enable=true
-      # nginx-proxy + acme-companion style routing — matches the pattern already used
-      # for the other apps on this host. If the reverse proxy is set up differently
-      # (e.g. a Cloudflare Tunnel ingress rule instead), drop these labels and add the
-      # tunnel's hostname -> homerack:3000 mapping there instead. See DEPLOYMENT.md.
-      - VIRTUAL_HOST=homerack.mraguz.com
-      - VIRTUAL_PORT=3000
-      - LETSENCRYPT_HOST=homerack.mraguz.com
+      - "com.centurylinklabs.watchtower.enable=true"
 
-networks:
-  proxy:
-    external: true
-
-volumes:
-  homerack_data:
+  watchtower:
+    image: nickfedor/watchtower:latest
+    container_name: homerack-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --label-enable --cleanup
