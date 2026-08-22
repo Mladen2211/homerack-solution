@@ -39,12 +39,14 @@ const reveals = useStaggeredReveal(uses.length)
   <section id="uses" class="py-13 sm:py-20">
     <div class="mx-auto max-w-[1180px] px-5 sm:px-8">
       <div class="mb-11 max-w-[560px]">
-        <div class="mb-3 font-mono text-[11.5px] tracking-[0.1em] text-blue uppercase">What it runs</div>
+        <div class="mb-3 font-mono text-[11.5px] tracking-[0.1em] text-blue uppercase">What goes inside</div>
         <h2 class="mb-3 font-display text-[clamp(26px,3.4vw,38px)] font-semibold tracking-[-0.01em]">
-          One box, a dozen jobs
+          One case, a dozen builds
         </h2>
         <p class="max-w-[520px] text-[15.5px] text-text-dim">
-          10U (or 5U) is enough headroom to stop paying for things you can run yourself.
+          Homerack doesn't come with any of this — it's just the case. 10U (or 5U) of standard
+          rack space for whatever you rack inside it, so you can stop paying for things you can
+          run yourself.
         </p>
       </div>
       <div class="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2 lg:grid-cols-3">

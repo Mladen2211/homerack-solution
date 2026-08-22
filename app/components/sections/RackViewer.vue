@@ -190,15 +190,16 @@ onMounted(() => {
   const latchMat = new THREE.MeshStandardMaterial({ color: 0xc9524a, metalness: 0.5, roughness: 0.4 })
 
   // ---- constant geometry ----
-  // Footprint is derived from the mounting-rail spacing rather than fixed directly:
-  // rails sit recessed GAP mm inward from the posts' inner face, and the posts have to
-  // sit far enough out to leave room for that recess.
+  // Footprint is derived from the mounting-hole spacing rather than fixed directly:
+  // the rails are centered on those holes and sit recessed GAP mm inward from the
+  // posts' inner face, and the posts have to sit far enough out to leave room for
+  // that recess.
   const POST = 15
   const TUBE_WALL = 1.5
-  const RAIL_SPACING = 237 // rail-to-rail (mounting hole) horizontal spacing
-  const RAIL_OFF = RAIL_SPACING / 2
+  const HOLE_SPACING = 237 // mounting-hole center-to-center horizontal spacing (the actual spec — the rail is just centered on it, not itself the 237mm dimension)
+  const HOLE_OFF = HOLE_SPACING / 2
   const GAP = 15 // recess: rail's outer face to post's inner face
-  const POST_OFF = RAIL_OFF + POST / 2 + GAP + POST / 2 // post centerline
+  const POST_OFF = HOLE_OFF + POST / 2 + GAP + POST / 2 // post centerline
   const HALF = POST_OFF + POST / 2 // outer footprint half-width
   const FOOT = 2 * HALF
   const PANEL_T = 1.5
@@ -211,11 +212,12 @@ onMounted(() => {
     { x: -POST_OFF, z: POST_OFF },
     { x: POST_OFF, z: POST_OFF },
   ]
+  // Rails are centered on the mounting holes, so their own centerline sits at ±HOLE_OFF.
   const railPositions = [
-    { x: -RAIL_OFF, z: -POST_OFF },
-    { x: RAIL_OFF, z: -POST_OFF },
-    { x: -RAIL_OFF, z: POST_OFF },
-    { x: RAIL_OFF, z: POST_OFF },
+    { x: -HOLE_OFF, z: -POST_OFF },
+    { x: HOLE_OFF, z: -POST_OFF },
+    { x: -HOLE_OFF, z: POST_OFF },
+    { x: HOLE_OFF, z: POST_OFF },
   ]
 
   const groupPosts = new THREE.Group()

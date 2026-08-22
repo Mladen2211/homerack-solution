@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const links = [
   { href: '#viewer', label: 'Blueprint' },
-  { href: '#uses', label: 'What it runs' },
+  { href: '#uses', label: 'What goes inside' },
   { href: '#attachments', label: 'Rack units' },
   { href: '#lifestyle', label: 'In the room' },
   { href: '#family', label: 'R1 / R.5' },
