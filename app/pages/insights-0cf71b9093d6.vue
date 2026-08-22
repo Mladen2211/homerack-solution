@@ -139,7 +139,7 @@ function relativeTime(iso: string) {
           <span v-if="lastUpdatedLabel">updated {{ lastUpdatedLabel }}</span>
           <button
             type="button"
-            class="cursor-pointer rounded-md border border-line px-2.5 py-1 text-text-dim transition-colors duration-150 hover:border-[#3a3f4c] hover:text-text disabled:cursor-default disabled:opacity-50"
+            class="cursor-pointer rounded-md border border-line px-2.5 py-1.5 text-text-dim transition-colors duration-150 hover:border-[#3a3f4c] hover:text-text disabled:cursor-default disabled:opacity-50"
             :disabled="refreshing"
             @click="refreshNow"
           >
@@ -184,13 +184,20 @@ function relativeTime(iso: string) {
             <h2 class="font-display text-[18px] font-semibold">Would you buy a Homerack?</h2>
             <button
               type="button"
-              class="cursor-pointer font-mono text-[11px] tracking-[0.06em] text-text-faint uppercase transition-colors duration-150 hover:text-text-dim"
+              class="-mx-2 -my-1 cursor-pointer rounded-md px-2 py-1 font-mono text-[11px] tracking-[0.06em] text-text-faint uppercase transition-colors duration-150 hover:text-text-dim"
               @click="showInterestTable = !showInterestTable"
             >
               {{ showInterestTable ? 'View chart' : 'View as table' }}
             </button>
           </div>
 
+          <Transition
+            mode="out-in"
+            enter-active-class="transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            leave-active-class="transition-opacity duration-100 ease-[cubic-bezier(0.7,0,0.84,0)]"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+          >
           <div v-if="!showInterestTable" class="flex flex-col gap-4">
             <div v-for="row in data.interest" :key="row.option" class="group">
               <div class="mb-1.5 flex items-baseline justify-between gap-3 text-[13.5px]">
@@ -229,6 +236,7 @@ function relativeTime(iso: string) {
               </tr>
             </tbody>
           </table>
+          </Transition>
         </div>
 
         <!-- Size chart -->
@@ -237,7 +245,7 @@ function relativeTime(iso: string) {
             <h2 class="font-display text-[18px] font-semibold">Which size(s) interest people?</h2>
             <button
               type="button"
-              class="cursor-pointer font-mono text-[11px] tracking-[0.06em] text-text-faint uppercase transition-colors duration-150 hover:text-text-dim"
+              class="-mx-2 -my-1 cursor-pointer rounded-md px-2 py-1 font-mono text-[11px] tracking-[0.06em] text-text-faint uppercase transition-colors duration-150 hover:text-text-dim"
               @click="showSizeTable = !showSizeTable"
             >
               {{ showSizeTable ? 'View chart' : 'View as table' }}
@@ -248,6 +256,13 @@ function relativeTime(iso: string) {
             {{ data.total }} total responses.
           </p>
 
+          <Transition
+            mode="out-in"
+            enter-active-class="transition-opacity duration-150 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            leave-active-class="transition-opacity duration-100 ease-[cubic-bezier(0.7,0,0.84,0)]"
+            enter-from-class="opacity-0"
+            leave-to-class="opacity-0"
+          >
           <div v-if="!showSizeTable" class="flex flex-col gap-4">
             <div v-for="row in data.sizes" :key="row.option" class="group">
               <div class="mb-1.5 flex items-baseline justify-between gap-3 text-[13.5px]">
@@ -285,6 +300,7 @@ function relativeTime(iso: string) {
               </tr>
             </tbody>
           </table>
+          </Transition>
         </div>
 
         <!-- Comments -->

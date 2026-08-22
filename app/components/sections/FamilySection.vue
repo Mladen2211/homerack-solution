@@ -9,7 +9,7 @@ const family = [
       { k: 'Height', v: '500mm' },
       { k: 'Capacity', v: '10U' },
       { k: 'Clearance', v: '~28mm top/bottom' },
-      { k: 'Rivets', v: '26' },
+      { k: 'Rivets', v: '10' },
     ],
   },
   {
@@ -21,7 +21,7 @@ const family = [
       { k: 'Height', v: '250mm' },
       { k: 'Capacity', v: '5U' },
       { k: 'Clearance', v: '~14mm top/bottom' },
-      { k: 'Rivets', v: '26' },
+      { k: 'Rivets', v: '10' },
     ],
   },
 ]
@@ -38,8 +38,8 @@ const reveals = useStaggeredReveal(family.length)
           Two heights, one part system
         </h2>
         <p class="max-w-[520px] text-[15.5px] text-text-dim">
-          Same 252×252mm footprint, same fasteners, same mounting standard — R.5 is just R1 with
-          the height parameter halved.
+          Same 312×312mm footprint, same welded frame, same mounting standard — R.5 is just R1
+          with the height parameter halved.
         </p>
       </div>
       <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">

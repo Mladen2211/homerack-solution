@@ -9,16 +9,19 @@ const showPosts = ref(true)
 const showRods = ref(true)
 const showPanels = ref(true)
 const showRivets = ref(true)
-const showHoles = ref(true)
+const showRails = ref(true)
 const showFeet = ref(true)
 const showDoor = ref(false)
 const explodeValue = ref(0)
 const doorValue = ref(0)
 const variant = ref<Variant>('R1')
 const finishKey = ref<Finish>('raw')
+// Controls panel starts collapsed on mobile (sm: and up ignores this and stays open —
+// see the template's panelOpen class binding) so the 3D model is visible first.
+const panelOpen = ref(false)
 
 const VARIANTS: Record<Variant, { height: number; numU: number; title: string; sub: string }> = {
-  R1: { height: 500, numU: 10, title: 'Homerack R1', sub: '10U · drag to orbit · scroll to zoom' },
+  R1: { height: 500, numU: 10, title: 'Homerack R1', sub: '10U · recessed mounting rails · drag to orbit' },
   R5: { height: 250, numU: 5, title: 'Homerack R.5', sub: '5U · half-height variant' },
 }
 
@@ -138,6 +141,7 @@ onMounted(() => {
     roughness: 0.35,
     side: THREE.DoubleSide,
   })
+  const railMat = new THREE.MeshStandardMaterial({ color: 0x9fb9bf, metalness: 0.55, roughness: 0.4 })
 
   function ventTexture(baseColor?: string, holeColor?: string) {
     baseColor = baseColor || '#6c7180'
@@ -186,33 +190,43 @@ onMounted(() => {
   const latchMat = new THREE.MeshStandardMaterial({ color: 0xc9524a, metalness: 0.5, roughness: 0.4 })
 
   // ---- constant geometry ----
+  // Footprint is derived from the mounting-rail spacing rather than fixed directly:
+  // rails sit recessed GAP mm inward from the posts' inner face, and the posts have to
+  // sit far enough out to leave room for that recess.
   const POST = 15
-  const FOOT = 252
-  const HALF = FOOT / 2
-  const OFF = HALF - POST / 2
-  const WALL = 2
   const TUBE_WALL = 1.5
+  const RAIL_SPACING = 237 // rail-to-rail (mounting hole) horizontal spacing
+  const RAIL_OFF = RAIL_SPACING / 2
+  const GAP = 15 // recess: rail's outer face to post's inner face
+  const POST_OFF = RAIL_OFF + POST / 2 + GAP + POST / 2 // post centerline
+  const HALF = POST_OFF + POST / 2 // outer footprint half-width
+  const FOOT = 2 * HALF
   const PANEL_T = 1.5
-  const EPS = 0.3
   const U = 44.45
   const FOOT_R = 11
   const FOOT_H = 8
   const postPositions = [
-    { x: -OFF, z: -OFF },
-    { x: OFF, z: -OFF },
-    { x: -OFF, z: OFF },
-    { x: OFF, z: OFF },
+    { x: -POST_OFF, z: -POST_OFF },
+    { x: POST_OFF, z: -POST_OFF },
+    { x: -POST_OFF, z: POST_OFF },
+    { x: POST_OFF, z: POST_OFF },
+  ]
+  const railPositions = [
+    { x: -RAIL_OFF, z: -POST_OFF },
+    { x: RAIL_OFF, z: -POST_OFF },
+    { x: -RAIL_OFF, z: POST_OFF },
+    { x: RAIL_OFF, z: POST_OFF },
   ]
 
   const groupPosts = new THREE.Group()
   const groupRods = new THREE.Group()
+  const groupRails = new THREE.Group()
   const groupPanels = new THREE.Group()
   const groupRivets = new THREE.Group()
-  const groupHoles = new THREE.Group()
   const groupFeet = new THREE.Group()
   const doorPivot = new THREE.Object3D() // rotates — the door leaf itself
   const groupDoorFixed = new THREE.Group() // stays put — hinge leaf + latch
-  scene.add(groupPosts, groupRods, groupPanels, groupRivets, groupHoles, groupFeet, doorPivot, groupDoorFixed)
+  scene.add(groupPosts, groupRods, groupRails, groupPanels, groupRivets, groupFeet, doorPivot, groupDoorFixed)
   const grid = new THREE.GridHelper(1000, 20, 0x23262f, 0x181a20)
   scene.add(grid)
 
@@ -247,49 +261,51 @@ onMounted(() => {
     return g
   }
 
-  function buildMiterSlab(
-    crossAxis: 'x' | 'z',
-    crossOuter: number,
-    crossInner: number,
-    runAxis: 'x' | 'z',
-    thickAxis: 'y',
+  // A true 45° miter, like a picture-frame corner — each piece is cut at 45° at both
+  // ends so four of them meet flush at a corner with no gap, no overlap, and no step.
+  // Built via THREE.Shape + ExtrudeGeometry rather than hand-rolled triangles, so
+  // winding/normals are handled by Three.js itself.
+  function axisVec3(name: 'x' | 'y' | 'z') {
+    return name === 'x' ? new THREE.Vector3(1, 0, 0) : name === 'y' ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1)
+  }
+  function buildMiterBar(
+    crossAxis: 'x' | 'y' | 'z',
+    crossCenter: number,
+    crossWidth: number,
+    runAxis: 'x' | 'y' | 'z',
+    runHalf: number,
+    inset: number,
+    thickAxis: 'x' | 'y' | 'z',
     thickMin: number,
     thickMax: number,
+    mat: THREE.Material,
   ) {
-    const inset = Math.abs(crossOuter - crossInner)
-    const pts2D = [
-      [crossInner, -HALF + inset],
-      [crossOuter, -HALF],
-      [crossOuter, HALF],
-      [crossInner, HALF - inset],
-    ]
-    function make3(pt2: number[], thickVal: number) {
-      const p: Record<string, number> = { x: 0, y: 0, z: 0 }
-      p[crossAxis] = pt2[0]!
-      p[runAxis] = pt2[1]!
-      p[thickAxis] = thickVal
-      return new THREE.Vector3(p.x, p.y, p.z)
-    }
-    const bottom = pts2D.map((p) => make3(p, thickMin))
-    const top = pts2D.map((p) => make3(p, thickMax))
-    const verts = [...bottom, ...top]
-    const positions: number[] = []
-    function pushTri(a: number, b: number, c: number) {
-      ;[a, b, c].forEach((i) => positions.push(verts[i]!.x, verts[i]!.y, verts[i]!.z))
-    }
-    pushTri(0, 1, 2)
-    pushTri(0, 2, 3)
-    pushTri(4, 6, 5)
-    pushTri(4, 7, 6)
-    for (let i = 0; i < 4; i++) {
-      const ni = (i + 1) % 4
-      pushTri(i, ni, ni + 4)
-      pushTri(i, ni + 4, i + 4)
-    }
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
-    geo.computeVertexNormals()
-    return geo
+    const half = crossWidth / 2
+    const sgn = crossCenter >= 0 ? 1 : -1 // "outer" = further from center, works for either side
+    const outer = crossCenter + sgn * half
+    const inner = crossCenter - sgn * half
+    const shape = new THREE.Shape()
+    shape.moveTo(inner, -runHalf + inset)
+    shape.lineTo(outer, -runHalf)
+    shape.lineTo(outer, runHalf)
+    shape.lineTo(inner, runHalf - inset)
+    shape.closePath()
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: thickMax - thickMin, bevelEnabled: false, steps: 1 })
+    const mesh = new THREE.Mesh(geo, mat)
+
+    // (crossAxis, runAxis, thickAxis) isn't always a right-handed triple — e.g. (x,z,y)
+    // is a reflection, not a rotation, and Quaternion.setFromRotationMatrix silently
+    // produces garbage for a reflection matrix. Detect it and flip the thickness axis
+    // (and which end we extrude from) so the basis is always a proper rotation.
+    const crossVec = axisVec3(crossAxis)
+    const runVec = axisVec3(runAxis)
+    const thickVec = axisVec3(thickAxis)
+    const properRotation = new THREE.Vector3().crossVectors(crossVec, runVec).dot(thickVec) > 0
+    const basisThickVec = properRotation ? thickVec : thickVec.clone().negate()
+    const basis = new THREE.Matrix4().makeBasis(crossVec, runVec, basisThickVec)
+    mesh.quaternion.setFromRotationMatrix(basis)
+    mesh.position.copy(axisVec3(thickAxis).multiplyScalar(properRotation ? thickMin : thickMax))
+    return mesh
   }
 
   function addRivet(x: number, y: number, z: number, axis: 'x' | 'z') {
@@ -303,15 +319,15 @@ onMounted(() => {
   function buildAssembly(height: number, numU: number) {
     clearGroup(groupPosts)
     clearGroup(groupRods)
+    clearGroup(groupRails)
     clearGroup(groupPanels)
     clearGroup(groupRivets)
-    clearGroup(groupHoles)
     clearGroup(groupFeet)
     clearGroup(doorPivot)
     clearGroup(groupDoorFixed)
     doorPivot.rotation.y = 0
 
-    // 1. corner posts
+    // 1. corner posts — structural only, no holes (mounting holes now live on the rails)
     postPositions.forEach((p) => {
       const g = makeHollowPost(POST, TUBE_WALL, height)
       g.position.set(p.x, height / 2, p.z)
@@ -320,64 +336,81 @@ onMounted(() => {
       groupPosts.add(g)
     })
 
-    // 1b. feet — small pads directly under each post
+    // 1b. feet — mounted on the underside of the bottom frame ring. The bottom mitered
+    // ring spans Y:[-POST,0], so "the bottom side" of the case is at Y=-POST, not Y=0.
     const footGeo = new THREE.CylinderGeometry(FOOT_R, FOOT_R * 0.9, FOOT_H, 20)
     postPositions.forEach((p) => {
       const f = new THREE.Mesh(footGeo, footMat)
-      f.position.set(p.x, -FOOT_H / 2, p.z)
+      f.position.set(p.x, -POST - FOOT_H / 2, p.z)
       f.userData.base = f.position.clone()
       f.userData.dir = new THREE.Vector3(0, -1, 0)
       groupFeet.add(f)
     })
 
-    // 2. angle rods
-    const rodSides: { crossAxis: 'x' | 'z'; crossOuter: number; runAxis: 'x' | 'z' }[] = [
-      { crossAxis: 'x', crossOuter: HALF, runAxis: 'z' },
-      { crossAxis: 'x', crossOuter: -HALF, runAxis: 'z' },
-      { crossAxis: 'z', crossOuter: HALF, runAxis: 'x' },
-      { crossAxis: 'z', crossOuter: -HALF, runAxis: 'x' },
-    ]
+    // 2. frame rods — true 45° miter, welded. Four pieces per level meet corner-to-corner
+    // like picture-frame moulding; nothing to rivet here anymore.
     const levels = [
-      { capMin: height, capMax: height + WALL, legMin: height - POST, legMax: height, dirY: 1 },
-      { capMin: -WALL, capMax: 0, legMin: 0, legMax: POST, dirY: -1 },
+      { yMin: height, yMax: height + POST, dirY: 1 },
+      { yMin: -POST, yMax: 0, dirY: -1 },
     ]
-    rodSides.forEach((side) => {
-      const sgn = Math.sign(side.crossOuter)
-      const crossInner = side.crossOuter - sgn * POST
-      levels.forEach((lvl) => {
-        const group = new THREE.Group()
-        const capGeo = buildMiterSlab(side.crossAxis, side.crossOuter, crossInner, side.runAxis, 'y', lvl.capMin, lvl.capMax)
-        group.add(new THREE.Mesh(capGeo, rodMat))
-        const legOuter = side.crossOuter + sgn * EPS
-        const legInner = legOuter + sgn * WALL
-        const legCenter = (legOuter + legInner) / 2
-        const legMidY = (lvl.legMin + lvl.legMax) / 2
-        let leg: THREE.Mesh
-        if (side.crossAxis === 'x') {
-          leg = new THREE.Mesh(new THREE.BoxGeometry(WALL, POST, FOOT), rodMat)
-          leg.position.set(legCenter, legMidY, 0)
-        } else {
-          leg = new THREE.Mesh(new THREE.BoxGeometry(FOOT, POST, WALL), rodMat)
-          leg.position.set(0, legMidY, legCenter)
-        }
-        group.add(leg)
-        group.userData.base = new THREE.Vector3(0, 0, 0)
-        const dirX = side.crossAxis === 'x' ? sgn : 0
-        const dirZ = side.crossAxis === 'z' ? sgn : 0
-        group.userData.dir = new THREE.Vector3(dirX, lvl.dirY * 0.6, dirZ).normalize()
-        groupRods.add(group)
-
-        // rivet through the LEG face into the post's flat side wall — not down through
-        // the thin mitered cap into the hollow post end, which has almost nothing to bite into
-        if (side.crossAxis === 'x') {
-          ;[-OFF, OFF].forEach((zEnd) => addRivet(legCenter, legMidY, zEnd, 'x'))
-        } else {
-          ;[-OFF, OFF].forEach((xEnd) => addRivet(xEnd, legMidY, legCenter, 'z'))
-        }
+    levels.forEach((lvl) => {
+      // depth-direction sides (left, right), running along Z
+      ;[-1, 1].forEach((sx) => {
+        const rod = buildMiterBar('x', sx * POST_OFF, POST, 'z', POST_OFF + POST / 2, POST, 'y', lvl.yMin, lvl.yMax, rodMat)
+        rod.userData.base = rod.position.clone() // buildMiterBar sets a real position — don't stomp it back to origin
+        rod.userData.dir = new THREE.Vector3(sx, lvl.dirY * 0.6, 0).normalize()
+        groupRods.add(rod)
+      })
+      // width-direction sides (front, back), running along X
+      ;[-1, 1].forEach((sz) => {
+        const rod = buildMiterBar('z', sz * POST_OFF, POST, 'x', POST_OFF + POST / 2, POST, 'y', lvl.yMin, lvl.yMax, rodMat)
+        rod.userData.base = rod.position.clone()
+        rod.userData.dir = new THREE.Vector3(0, lvl.dirY * 0.6, sz).normalize()
+        groupRods.add(rod)
       })
     })
 
-    // 3. panels
+    // 3. mounting rails — flat mounting strip, recessed inward from the posts. A rod
+    // cross-section was never doing anything useful here (the rail just needs a flat
+    // face to put holes in) — a simple flat bar is lighter and more standard for an
+    // actual rack rail.
+    const RAIL_T = 3 // flat plate thickness
+    function eiaOffsets() {
+      const offs: number[] = []
+      for (let u = 0; u < numU; u++) {
+        const b = u * U
+        offs.push(b + 6.35, b + 22.225, b + 38.1)
+      }
+      return offs
+    }
+    const railStartY = (height - numU * U) / 2
+    const holeYs = eiaOffsets().map((o) => railStartY + o)
+    const holeGeo = new THREE.CylinderGeometry(2.1, 2.1, RAIL_T * 2.2, 14)
+    const railGeo = new THREE.BoxGeometry(POST, height, RAIL_T)
+    railPositions.forEach((p) => {
+      const g = new THREE.Mesh(railGeo, railMat)
+      g.position.set(p.x, height / 2, p.z)
+      g.userData.base = g.position.clone()
+      g.userData.dir = new THREE.Vector3(p.x, 0, p.z).normalize()
+      groupRails.add(g)
+
+      const outward = Math.sign(p.z)
+      const dir = g.userData.dir
+      ;[outward, -outward].forEach((faceDir) => {
+        holeYs.forEach((y) => {
+          const h = new THREE.Mesh(holeGeo, holeMat)
+          h.rotation.x = Math.PI / 2
+          h.position.set(p.x, y, p.z + faceDir * (RAIL_T / 2))
+          h.userData.base = h.position.clone()
+          h.userData.dir = dir
+          groupRails.add(h)
+        })
+      })
+    })
+
+    // 4. panels — top panel sits ON TOP of the frame now (the mitered top rods have real
+    // thickness, so tucking the panel underneath would look sunken from above). Bottom
+    // panel stays inside-mounted, since that face isn't normally seen.
     const sidePanelGeo = new THREE.BoxGeometry(PANEL_T, height, FOOT)
     ;[-1, 1].forEach((sign) => {
       const m = new THREE.Mesh(sidePanelGeo, ventedPanelMat)
@@ -388,148 +421,113 @@ onMounted(() => {
       m.userData.sign = sign
       groupPanels.add(m)
     })
-    const CAP_PANEL_SIZE = FOOT - 12
-    const capPanelGeo = new THREE.BoxGeometry(CAP_PANEL_SIZE, PANEL_T, CAP_PANEL_SIZE)
-    ;[
-      { y: height - PANEL_T / 2, dir: 1, kind: 'top' },
-      { y: PANEL_T / 2, dir: -1, kind: 'bottom' },
-    ].forEach((spec) => {
-      const m = new THREE.Mesh(capPanelGeo, solidPanelMat)
-      m.position.set(0, spec.y, 0)
-      m.userData.base = m.position.clone()
-      m.userData.dir = new THREE.Vector3(0, spec.dir, 0)
-      m.userData.kind = spec.kind
-      groupPanels.add(m)
-    })
+    const topPanelGeo = new THREE.BoxGeometry(FOOT, PANEL_T, FOOT)
+    const topPanel = new THREE.Mesh(topPanelGeo, solidPanelMat)
+    topPanel.position.set(0, height + POST + PANEL_T / 2, 0) // resting on top of the mitered frame
+    topPanel.userData.base = topPanel.position.clone()
+    topPanel.userData.dir = new THREE.Vector3(0, 1, 0)
+    topPanel.userData.kind = 'top'
+    groupPanels.add(topPanel)
 
-    // 4. mounting holes — both faces of each post
-    function eiaHoleOffsets() {
-      const offs: number[] = []
-      for (let u = 0; u < numU; u++) {
-        const uStart = u * U
-        offs.push(uStart + 6.35, uStart + 22.225, uStart + 38.1)
-      }
-      return offs
-    }
-    const railStartY = (height - numU * U) / 2
-    const holeYs = eiaHoleOffsets().map((o) => railStartY + o)
-    const holeGeo = new THREE.CylinderGeometry(2.1, 2.1, TUBE_WALL * 2.2, 14)
-    postPositions.forEach((p) => {
-      const outward = Math.sign(p.z)
-      const dir = new THREE.Vector3(p.x, 0, p.z).normalize()
-      ;[outward, -outward].forEach((faceDir) => {
-        holeYs.forEach((y) => {
-          const h = new THREE.Mesh(holeGeo, holeMat)
-          h.rotation.x = Math.PI / 2
-          h.position.set(p.x, y, p.z + faceDir * (POST / 2 - TUBE_WALL / 2))
-          h.userData.base = h.position.clone()
-          h.userData.dir = dir
-          groupHoles.add(h)
-        })
-      })
-    })
+    const BOTTOM_CAP_SIZE = FOOT - 12
+    const bottomPanelGeo = new THREE.BoxGeometry(BOTTOM_CAP_SIZE, PANEL_T, BOTTOM_CAP_SIZE)
+    const bottomPanel = new THREE.Mesh(bottomPanelGeo, solidPanelMat)
+    bottomPanel.position.set(0, -PANEL_T / 2, 0) // still tucked up inside the bottom frame
+    bottomPanel.userData.base = bottomPanel.position.clone()
+    bottomPanel.userData.dir = new THREE.Vector3(0, -1, 0)
+    bottomPanel.userData.kind = 'bottom'
+    groupPanels.add(bottomPanel)
 
-    // panel rivets (frame-corner rivets were already added above, at the leg/post joints).
-    // Top/bottom panels don't get rivets — they're sized to sit inside the frame, resting
-    // against the underside of the cap ring, held in place once the side panels are on.
+    // 5. rivets — panels only. The frame itself (posts to rods, rod to rod at every
+    // mitered corner) is welded, not riveted, so there's nothing to fasten there.
     groupPanels.children.forEach((panel) => {
       if (panel.userData.kind !== 'side') return
       const x = panel.userData.sign * HALF
-      ;[-OFF, OFF].forEach((z) => {
-        addRivet(x, WALL + 4, z, 'x')
-        addRivet(x, height - WALL - 4, z, 'x')
+      ;[-POST_OFF, POST_OFF].forEach((z) => {
+        addRivet(x, POST + 4, z, 'x')
+        addRivet(x, height - POST - 4, z, 'x')
       })
-      addRivet(x, height / 2, -OFF, 'x')
+      addRivet(x, height / 2, -POST_OFF, 'x')
     })
 
-    // 5. front door — same closed-position appearance as before (rods in front of the
-    // front-left/front-right posts, same X-centerline). Two things had to change to
-    // actually deliver a real 270° swing, and both were verified numerically before
-    // touching the code (full 1°-step sweep, checked clearance against both posts):
-    //
-    // 1) The pivot has to be at the true hinge point, not at the door stile's own
-    //    center — otherwise the hinge-side stile has ~zero swing radius and just spins
-    //    in place, still parked in front of the left post at every angle.
-    // 2) A pivot placed right at the post's face (a tight, ~2mm-gap flush hinge) still
-    //    isn't enough: with only a ~14mm swing radius, sweeping 270° brings the stile
-    //    back around to within ~1mm of the post — it clips on the way round, worst
-    //    around 250-270°. A genuine collision-free 270° needs roughly 16mm more
-    //    standoff than a flush hinge gives — a "wide-throw"/extended-offset hinge,
-    //    used specifically to hold a door proud of an obstruction it needs to swing
-    //    clear of. That's exactly this situation, not a cosmetic choice.
-    const GAP = 6
-    const doorRestX = -OFF
-    const doorRestZ = -HALF - GAP - POST / 2 // door's closed-position target — unchanged
-    const doorWidth = 2 * OFF
-
-    const hingeFaceX = -HALF // post's outer face AND door stile's outer face — shared plane
-    const PIVOT_X = -142
-    const PIVOT_Z = -121 // verified: clear of both posts through the full 0-270° sweep
+    // 6. front door — true 45° miter, same as the main frame. Vented panel fills the
+    // full inner opening with no border gap. Door spans the FULL case height and width
+    // (including the top/bottom mitered frame rings, not just the post span) — covers
+    // everything except the feet. Hinge sits AT the post's own outer corner (not pushed
+    // out) — with the swing capped at 180° instead of 270°, the door never sweeps back
+    // around near the post, so no wide-throw offset is needed.
+    const DOOR_GAP = 6
+    const doorRestX = -POST_OFF
+    const doorRestZ = -HALF - DOOR_GAP - POST / 2
+    const doorWidth = 2 * POST_OFF // matches the case's full outer width
+    const DOOR_HEIGHT = height + 2 * POST // full case height: bottom ring to top ring
+    const hingeFaceX = -HALF
+    const PIVOT_X = -HALF - 2
+    const PIVOT_Z = -HALF - 2 // right at the post's outer corner, small proud nudge
     doorPivot.position.set(PIVOT_X, 0, PIVOT_Z)
     const toLocal = (wx: number, wz: number): [number, number] => [wx - PIVOT_X, wz - PIVOT_Z]
 
-    let [lx, lz] = toLocal(doorRestX, doorRestZ)
-    const doorLeftRod = makeHollowPost(POST, TUBE_WALL, height)
-    doorLeftRod.position.set(lx, height / 2, lz)
-    doorPivot.add(doorLeftRod)
+    const doorHalfW = doorWidth / 2
+    const doorHalfH = DOOR_HEIGHT / 2 - POST / 2 // rail's own half-width (POST/2) adds back on to reach the true outer span
+    const [dcx, dcz] = toLocal(doorRestX + doorHalfW, doorRestZ)
+    const doorFrameGroup = new THREE.Group()
+    doorFrameGroup.position.set(dcx, height / 2, dcz) // case is symmetric about height/2 even with the taller door
+    doorPivot.add(doorFrameGroup)
 
-    ;[lx, lz] = toLocal(doorRestX + doorWidth, doorRestZ)
-    const doorRightRod = makeHollowPost(POST, TUBE_WALL, height)
-    doorRightRod.position.set(lx, height / 2, lz)
-    doorPivot.add(doorRightRod)
+    // stiles (left, right) — cross axis X, run axis Y
+    ;[-1, 1].forEach((sx) => {
+      doorFrameGroup.add(
+        buildMiterBar('x', sx * doorHalfW, POST, 'y', doorHalfH + POST / 2, POST, 'z', -POST / 2, POST / 2, alumMat),
+      )
+    })
+    // rails (top, bottom) — cross axis Y, run axis X
+    ;[-1, 1].forEach((sy) => {
+      doorFrameGroup.add(
+        buildMiterBar('y', sy * doorHalfH, POST, 'x', doorHalfW + POST / 2, POST, 'z', -POST / 2, POST / 2, alumMat),
+      )
+    })
 
-    ;[lx, lz] = toLocal(doorRestX + OFF, doorRestZ - POST / 2 - PANEL_T / 2)
-    const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(FOOT, height, PANEL_T), ventedPanelMat)
-    doorPanel.position.set(lx, height / 2, lz) // flush on the door's own outer face
-    doorPivot.add(doorPanel)
+    // vented panel — sized to the frame's actual inner opening (each mitered piece's
+    // inner face sits POST/2 in from its own centerline), so it fills edge-to-edge.
+    const doorPanel = new THREE.Mesh(new THREE.BoxGeometry(doorWidth - POST, 2 * doorHalfH - POST, PANEL_T), ventedPanelMat)
+    doorPanel.position.set(0, 0, -POST / 2 - PANEL_T / 2)
+    doorFrameGroup.add(doorPanel)
 
-    // wide-throw hinge: barrel at the true pivot, connected back to each mounting face
-    // by an offset bracket — a straight bracket on the post side (same Z as the pivot,
-    // so it's just a plain standoff arm), an angled one on the door side (the door's
-    // own face sits at a different Z, so its bracket has to bridge both X and Z).
+    // hinge — short brackets, since the pivot sits right at the post's corner
     function makeBar(ax: number, az: number, bx: number, bz: number, thickness: number, mat: THREE.Material) {
       const dx = bx - ax
       const dz = bz - az
       const len = Math.hypot(dx, dz)
-      const bar = new THREE.Mesh(new THREE.BoxGeometry(len, height, thickness), mat)
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(len, DOOR_HEIGHT, thickness), mat)
       bar.position.set((ax + bx) / 2, height / 2, (az + bz) / 2)
       bar.rotation.y = Math.atan2(-dz, dx)
       return bar
     }
-
-    const hingeBarrel = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, height, 16), hingeMat)
-    hingeBarrel.position.set(PIVOT_X, height / 2, PIVOT_Z) // fixed — the pin doesn't rotate
+    const hingeBarrel = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, DOOR_HEIGHT, 16), hingeMat)
+    hingeBarrel.position.set(PIVOT_X, height / 2, PIVOT_Z)
     groupDoorFixed.add(hingeBarrel)
 
-    // post-side bracket: post's outer face → pivot (world coords, fixed)
-    const postMountZ = PIVOT_Z // mounting height on the post's face lines up straight with the pivot
-    const postBracket = makeBar(hingeFaceX, postMountZ, PIVOT_X, PIVOT_Z, 6, hingeMat)
-    groupDoorFixed.add(postBracket)
+    const postMountZ = PIVOT_Z
+    groupDoorFixed.add(makeBar(hingeFaceX, postMountZ, PIVOT_X, PIVOT_Z, 6, hingeMat))
 
-    // door-side bracket: door stile's outer face (when closed) → pivot, built in world
-    // coords for clarity then converted to local (it rotates with the door)
     const doorMountWorldX = hingeFaceX
-    const doorMountWorldZ = doorRestZ + 2 // near the stile's own depth
+    const doorMountWorldZ = doorRestZ + 2
     const [pax, paz] = toLocal(doorMountWorldX, doorMountWorldZ)
-    const [pbx, pbz] = toLocal(PIVOT_X, PIVOT_Z) // = [0,0], the pivot itself
-    const doorBracket = makeBar(pax, paz, pbx, pbz, 6, hingeMat)
-    doorPivot.add(doorBracket)
+    doorPivot.add(makeBar(pax, paz, 0, 0, 6, hingeMat))
 
-    // magnetic latch on the opposite (right) side — same shared-plane logic as before,
-    // both magnets at the identical world position when closed, well clear of the
-    // Z-face mounting holes and positioned at the same corner heights as the frame rivets.
+    // magnetic latch — top and bottom, positioned near the door's (taller) top/bottom edges
     const latchGeo = new THREE.CylinderGeometry(4, 4, 3, 16)
-    const latchZ = -HALF + 5 // near the post's own front-face edge
-    ;[POST / 2, height - POST / 2].forEach((y) => {
+    const latchZ = -HALF + 5
+    ;[-POST / 2, height + POST / 2].forEach((y) => {
       const postSide = new THREE.Mesh(latchGeo, latchMat)
       postSide.rotation.z = Math.PI / 2
-      postSide.position.set(HALF + 1.5, y, latchZ) // world — proud on the right post's outer face
+      postSide.position.set(HALF + 1.5, y, latchZ)
       groupDoorFixed.add(postSide)
 
       const [dx, dz] = toLocal(HALF + 1.5, latchZ)
       const doorSide = new THREE.Mesh(latchGeo, latchMat)
       doorSide.rotation.z = Math.PI / 2
-      doorSide.position.set(dx, y, dz) // local — same world position when closed
+      doorSide.position.set(dx, y, dz)
       doorPivot.add(doorSide)
     })
 
@@ -545,8 +543,8 @@ onMounted(() => {
     groupRivets.visible = amt === 0 && showRivets.value
     groupPosts.children.forEach((m) => m.position.copy(m.userData.base).addScaledVector(m.userData.dir, amt))
     groupRods.children.forEach((m) => m.position.copy(m.userData.base).addScaledVector(m.userData.dir, amt * 0.7))
+    groupRails.children.forEach((m) => m.position.copy(m.userData.base).addScaledVector(m.userData.dir, amt))
     groupPanels.children.forEach((m) => m.position.copy(m.userData.base).addScaledVector(m.userData.dir, amt * 1.3))
-    groupHoles.children.forEach((m) => m.position.copy(m.userData.base).addScaledVector(m.userData.dir, amt))
     groupFeet.children.forEach((m) => m.position.copy(m.userData.base).addScaledVector(m.userData.dir, amt * 0.5))
   }
 
@@ -556,7 +554,7 @@ onMounted(() => {
     explodeValue.value = 0
     doorValue.value = 0
     target.set(0, v.height / 2, 0)
-    spherical.radius = v.height * 1.7
+    spherical.radius = Math.max(v.height * 1.9, FOOT * 2.2)
     updateCam()
   }
 
@@ -600,7 +598,7 @@ onMounted(() => {
   watch(showRods, (v) => (groupRods.visible = v))
   watch(showPanels, (v) => (groupPanels.visible = v))
   watch(showRivets, applyExplode)
-  watch(showHoles, (v) => (groupHoles.visible = v))
+  watch(showRails, (v) => (groupRails.visible = v))
   watch(showFeet, (v) => (groupFeet.visible = v))
   watch(showDoor, (v) => {
     doorPivot.visible = v
@@ -608,7 +606,7 @@ onMounted(() => {
   })
   watch(explodeValue, applyExplode)
   watch(doorValue, (pct) => {
-    doorPivot.rotation.y = (pct / 100) * (Math.PI * 1.5) // swings outward, up to 270°
+    doorPivot.rotation.y = (pct / 100) * Math.PI // swings outward, up to 180°
   })
   watch(variant, runSelectVariant)
   watch(finishKey, runApplyFinish, { immediate: true })
@@ -654,85 +652,123 @@ onBeforeUnmount(() => cleanup?.())
   >
     <div ref="canvasHolder" class="absolute inset-0" />
 
-    <div
-      class="absolute top-4 left-4 max-h-[calc(100%-32px)] w-[262px] overflow-auto rounded-[10px] border border-[#33384a] bg-[rgba(20,22,30,0.9)] p-4 backdrop-blur-md"
+    <!-- Mobile-only compact toggle. The full panel is opacity/pointer-events hidden
+         (not just collapsed) below sm: by default — even a collapsed title strip was
+         still obstructing the top of the model on a small screen — so this small
+         floating button is all that sits over the canvas until the user asks for
+         controls. Always sm:hidden: desktop shows the full panel unconditionally. -->
+    <button
+      v-if="!panelOpen"
+      type="button"
+      class="absolute top-4 left-4 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border border-[#33384a] bg-[rgba(20,22,30,0.9)] text-[#9aa0b4] backdrop-blur-md transition-transform duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-90 sm:hidden"
+      aria-label="Show model controls"
+      aria-controls="rack-viewer-panel"
+      :aria-expanded="panelOpen"
+      @click="panelOpen = true"
     >
-      <h2 class="mb-1 font-display text-[15px] font-semibold text-white">{{ modelTitle }}</h2>
-      <div class="mb-3.5 font-body text-[11px] text-[#9aa0b4]">{{ modelSub }}</div>
+      <svg class="h-[18px] w-[18px]" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M4 6h12M4 10h12M4 14h8" stroke-linecap="round" />
+      </svg>
+    </button>
 
-      <div class="flex rounded-lg bg-[#1c1f28] p-[3px]">
+    <div
+      id="rack-viewer-panel"
+      class="absolute top-4 left-4 max-h-[calc(100%-32px)] w-[calc(100%-2rem)] origin-top-left overflow-auto rounded-[10px] border border-[#33384a] bg-[rgba(20,22,30,0.9)] p-4 backdrop-blur-md transition-[opacity,transform] duration-220 ease-[cubic-bezier(0.16,1,0.3,1)] sm:w-[262px] sm:pointer-events-auto sm:opacity-100 sm:scale-100"
+      :class="panelOpen ? 'pointer-events-auto opacity-100 scale-100' : 'pointer-events-none opacity-0 scale-95 sm:pointer-events-auto'"
+    >
+      <div class="flex items-start justify-between gap-2">
+        <span>
+          <h2 class="font-display text-[15px] font-semibold text-white">{{ modelTitle }}</h2>
+          <div class="mt-0.5 font-body text-[11.5px] text-[#9aa0b4]">{{ modelSub }}</div>
+        </span>
         <button
-          class="flex-1 rounded-md py-[7px] text-[11.5px] transition-colors"
-          :class="variant === 'R1' ? 'bg-blue font-semibold text-white' : 'cursor-pointer text-[#9aa0b4]'"
-          @click="variant = 'R1'"
+          type="button"
+          class="-mt-1 -mr-1 cursor-pointer rounded-md p-1.5 text-[#9aa0b4] transition-[color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] hover:text-white active:scale-90 sm:hidden"
+          aria-label="Hide model controls"
+          @click="panelOpen = false"
         >
-          R1 · 500mm
+          <svg class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M5.5 5.5l9 9M14.5 5.5l-9 9" stroke-linecap="round" />
+          </svg>
         </button>
-        <button
-          class="flex-1 rounded-md py-[7px] text-[11.5px] transition-colors"
-          :class="variant === 'R5' ? 'bg-blue font-semibold text-white' : 'cursor-pointer text-[#9aa0b4]'"
-          @click="variant = 'R5'"
-        >
-          R.5 · 250mm
-        </button>
-      </div>
-
-      <div class="mt-2 flex rounded-lg bg-[#1c1f28] p-[3px]">
-        <button
-          v-for="f in (['raw', 'white', 'black'] as const)"
-          :key="f"
-          class="flex-1 rounded-md py-[7px] text-[11.5px] capitalize transition-colors"
-          :class="finishKey === f ? 'bg-blue font-semibold text-white' : 'cursor-pointer text-[#9aa0b4]'"
-          @click="finishKey = f"
-        >
-          {{ f }}
-        </button>
-      </div>
-
-      <div class="mt-3.5 space-y-2 text-[13px]">
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #cfd3da" />Posts</span>
-          <input v-model="showPosts" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #a9adb8" />Angle rods</span>
-          <input v-model="showRods" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #6c7180" />Panels</span>
-          <input v-model="showPanels" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #ffcf5c" />Rivets</span>
-          <input v-model="showRivets" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #3fb8c9" />Mounting holes</span>
-          <input v-model="showHoles" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #3a3c42" />Feet</span>
-          <input v-model="showFeet" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-        <label class="flex cursor-pointer items-center justify-between">
-          <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #8fa8c9" />Front door</span>
-          <input v-model="showDoor" type="checkbox" class="h-[15px] w-[15px] accent-blue" />
-        </label>
-      </div>
-
-      <div v-if="showDoor" class="mt-3.5">
-        <div class="flex items-center justify-between text-[13px]"><span>Door</span><span>{{ doorLabel }}</span></div>
-        <input v-model.number="doorValue" type="range" min="0" max="100" class="w-full accent-blue" />
       </div>
 
       <div class="mt-3.5">
-        <div class="flex items-center justify-between text-[13px]"><span>Exploded view</span><span>{{ explodeValue }}%</span></div>
-        <input v-model.number="explodeValue" type="range" min="0" max="100" class="w-full accent-blue" />
-      </div>
+        <div class="flex rounded-lg bg-[#1c1f28] p-[3px]">
+          <button
+            class="flex-1 cursor-pointer rounded-md py-[7px] text-[11.5px] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97]"
+            :class="variant === 'R1' ? 'bg-blue font-semibold text-white' : 'text-[#9aa0b4]'"
+            @click="variant = 'R1'"
+          >
+            R1 · 500mm
+          </button>
+          <button
+            class="flex-1 cursor-pointer rounded-md py-[7px] text-[11.5px] transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97]"
+            :class="variant === 'R5' ? 'bg-blue font-semibold text-white' : 'text-[#9aa0b4]'"
+            @click="variant = 'R5'"
+          >
+            R.5 · 250mm
+          </button>
+        </div>
 
-      <div class="mt-3.5 border-t border-[#2c303e] pt-3 text-[10.5px] leading-relaxed text-[#7a7f8c]">
-        Materials and door placement are provisional and subject to change — will be updated after
-        physical fitment testing.
+        <div class="mt-2 flex rounded-lg bg-[#1c1f28] p-[3px]">
+          <button
+            v-for="f in (['raw', 'white', 'black'] as const)"
+            :key="f"
+            class="flex-1 cursor-pointer rounded-md py-[7px] text-[11.5px] capitalize transition-[background-color,color,transform] duration-150 ease-[cubic-bezier(0.16,1,0.3,1)] active:scale-[0.97]"
+            :class="finishKey === f ? 'bg-blue font-semibold text-white' : 'text-[#9aa0b4]'"
+            @click="finishKey = f"
+          >
+            {{ f }}
+          </button>
+        </div>
+
+        <div class="mt-3.5 space-y-1 text-[13px]">
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #cfd3da" />Posts</span>
+            <input v-model="showPosts" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #a9adb8" />Frame rods</span>
+            <input v-model="showRods" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #9fb9bf" />Mounting rails</span>
+            <input v-model="showRails" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #6c7180" />Panels</span>
+            <input v-model="showPanels" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #ffcf5c" />Panel rivets</span>
+            <input v-model="showRivets" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #3a3c42" />Feet</span>
+            <input v-model="showFeet" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+          <label class="flex cursor-pointer items-center justify-between py-1">
+            <span class="flex items-center gap-2"><span class="inline-block h-3 w-3 rounded-sm" style="background: #8fa8c9" />Front door</span>
+            <input v-model="showDoor" type="checkbox" class="h-[18px] w-[18px] accent-blue" />
+          </label>
+        </div>
+
+        <div v-if="showDoor" class="mt-3.5">
+          <div class="flex items-center justify-between text-[13px]"><span>Door</span><span>{{ doorLabel }}</span></div>
+          <input v-model.number="doorValue" type="range" min="0" max="100" class="w-full accent-blue" />
+        </div>
+
+        <div class="mt-3.5">
+          <div class="flex items-center justify-between text-[13px]"><span>Exploded view</span><span>{{ explodeValue }}%</span></div>
+          <input v-model.number="explodeValue" type="range" min="0" max="100" class="w-full accent-blue" />
+        </div>
+
+        <div class="mt-3.5 border-t border-[#2c303e] pt-3 text-[11.5px] leading-relaxed text-[#7a7f8c]">
+          Frame is welded at every mitered joint — only the two side panels are riveted on.
+          Materials and door placement are provisional and subject to change — will be updated
+          after physical fitment testing.
+        </div>
       </div>
     </div>
 

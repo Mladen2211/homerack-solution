@@ -74,7 +74,7 @@ const reveals = useStaggeredReveal(attachments.length + 1)
           <a
             :href="`/downloads/${item.file}`"
             :download="item.file"
-            class="mt-3.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-dim px-3 py-1.5 font-mono text-[11.5px] text-amber transition-colors duration-150 hover:bg-amber hover:text-[#1a1005]"
+            class="mt-3.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-dim px-3 py-2 font-mono text-[11.5px] text-amber transition-[background-color,color,transform] duration-150 hover:bg-amber hover:text-[#1a1005] active:scale-[0.97]"
           >
             Download {{ item.ext }}
             <span class="font-normal text-text-faint">· {{ item.size }}</span>

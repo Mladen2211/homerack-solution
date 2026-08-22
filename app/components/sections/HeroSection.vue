@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const facts = [
-  { value: '252×252mm', label: 'footprint' },
-  { value: '26', label: 'rivets' },
+  { value: '312×312mm', label: 'footprint' },
+  { value: '10', label: 'rivets' },
   { value: 'EIA-310', label: 'universal mounting' },
   { value: '2', label: 'heights — R1 & R.5' },
 ]

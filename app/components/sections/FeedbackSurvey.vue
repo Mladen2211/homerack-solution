@@ -69,6 +69,13 @@ const { target, isVisible, style } = useScrollReveal()
         :class="{ 'reveal-visible': isVisible }"
         :style="style"
       >
+        <Transition
+          mode="out-in"
+          enter-active-class="transition-opacity duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          leave-active-class="transition-opacity duration-150 ease-[cubic-bezier(0.7,0,0.84,0)]"
+          enter-from-class="opacity-0"
+          leave-to-class="opacity-0"
+        >
         <div v-if="!submitted">
           <h3 class="mb-2 font-display text-[22px] font-semibold">Quick survey — three questions</h3>
           <p class="mb-7.5 max-w-[520px] text-sm text-text-dim">
@@ -93,7 +100,7 @@ const { target, isVisible, style } = useScrollReveal()
                 v-for="opt in INTEREST_OPTIONS"
                 :key="opt"
                 type="button"
-                class="cursor-pointer rounded-lg border px-4 py-2.5 text-[13.5px] transition-all duration-150"
+                class="cursor-pointer rounded-lg border px-4 py-2.5 text-[13.5px] transition-all duration-150 active:scale-[0.97]"
                 :class="
                   interest === opt
                     ? 'border-blue bg-blue text-white'
@@ -115,7 +122,7 @@ const { target, isVisible, style } = useScrollReveal()
                 v-for="opt in SIZE_OPTIONS"
                 :key="opt"
                 type="button"
-                class="cursor-pointer rounded-lg border px-4 py-2.5 text-[13.5px] transition-all duration-150"
+                class="cursor-pointer rounded-lg border px-4 py-2.5 text-[13.5px] transition-all duration-150 active:scale-[0.97]"
                 :class="
                   sizes.includes(opt)
                     ? 'border-blue bg-blue text-white'
@@ -142,24 +149,29 @@ const { target, isVisible, style } = useScrollReveal()
 
           <button
             :disabled="submitting"
-            class="mt-2 rounded-lg bg-amber px-6.5 py-3 font-display text-sm font-semibold text-[#1a1005] transition-opacity duration-150 hover:opacity-88 disabled:cursor-default disabled:opacity-50"
+            class="mt-2 rounded-lg bg-amber px-6.5 py-3 font-display text-sm font-semibold text-[#1a1005] transition-[opacity,transform] duration-150 hover:opacity-88 active:scale-[0.98] disabled:cursor-default disabled:opacity-50"
             @click="submit"
           >
             {{ submitting ? 'Sending…' : 'Send feedback' }}
           </button>
-          <div v-if="error" class="mt-3 max-w-[520px] text-[11.5px] leading-relaxed text-[#c9524a]">
-            {{ error }}
-          </div>
+          <Transition
+            enter-active-class="transition-all duration-200 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            enter-from-class="opacity-0 -translate-y-1"
+          >
+            <div v-if="error" class="mt-3 max-w-[520px] text-[11.5px] leading-relaxed text-[#c9524a]">
+              {{ error }}
+            </div>
+          </Transition>
           <div class="mt-3 max-w-[520px] text-[11.5px] leading-relaxed text-text-faint">
             Responses are stored so the project can be shaped around actual interest — this is a
             small, informal concept survey, not a purchase commitment of any kind.
           </div>
         </div>
-
-        <div v-else class="animate-fade-in py-7.5 text-center">
+        <div v-else class="py-7.5 text-center">
           <h3 class="mb-2 font-display text-[22px] font-semibold">Thanks — that's genuinely useful.</h3>
           <p class="mx-auto text-sm text-text-dim">Your response has been recorded.</p>
         </div>
+        </Transition>
       </div>
     </div>
   </section>

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 const specs = [
-  { k: 'Footprint', v: '252 × 252mm' },
+  { k: 'Footprint', v: '312 × 312mm' },
   { k: 'Height', v: '500 / 250mm' },
   { k: 'Capacity', v: '10U / 5U' },
   { k: 'Mounting', v: 'EIA-310' },
-  { k: 'Fasteners', v: '26 rivets' },
+  { k: 'Fasteners', v: '10 rivets' },
   { k: 'Finish', v: 'Raw / RAL9010 / RAL9005' },
 ]
 </script>

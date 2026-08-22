@@ -72,7 +72,7 @@ const { target, isVisible, style } = useScrollReveal()
           <button
             v-for="key in roomKeys"
             :key="key"
-            class="min-w-[150px] flex-1 rounded-[9px] border px-3.5 py-3 text-left font-mono text-xs tracking-[0.03em] transition-all duration-150"
+            class="min-w-[150px] flex-1 cursor-pointer rounded-[9px] border px-3.5 py-3 text-left font-mono text-xs tracking-[0.03em] transition-all duration-150 active:scale-[0.98]"
             :class="
               activeRoom === key
                 ? 'border-amber-dim bg-[#26201a] text-amber'

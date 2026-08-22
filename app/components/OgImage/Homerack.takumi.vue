@@ -51,7 +51,7 @@ withDefaults(
     </div>
 
     <div style="display: flex; gap: 28px; font-family: 'Space Grotesk'; font-size: 20px; color: #686d7a">
-      <div style="display: flex">252×252mm footprint</div>
+      <div style="display: flex">312×312mm footprint</div>
       <div style="display: flex">EIA-310 mounting</div>
       <div style="display: flex">R1 / R.5</div>
     </div>
